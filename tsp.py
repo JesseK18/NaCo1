@@ -154,7 +154,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     lat2: float
         Latitude for point 2
     lon2: float
-        Longtitude for point 1
+        Longtitude for point 2
 
     Returns
     -------
@@ -178,7 +178,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 class TSP:
     """Traveling Salesperson object, with plotting utility"""
 
-    def __init__(self, plot: bool = True):
+    def __init__(self, plot: bool = True): #CHANGE HERE FOR VISUALIZATION
         """Create a Traveling Salesperson object
 
         Parameters
