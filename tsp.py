@@ -154,7 +154,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     lat2: float
         Latitude for point 2
     lon2: float
-        Longtitude for point 2
+        Longtitude for point 1
 
     Returns
     -------
@@ -178,7 +178,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 class TSP:
     """Traveling Salesperson object, with plotting utility"""
 
-    def __init__(self, plot: bool = True): #CHANGE HERE FOR VISUALIZATION
+    def __init__(self, plot: bool = True): # turn True for visualisation
         """Create a Traveling Salesperson object
 
         Parameters
@@ -282,27 +282,215 @@ class TSP:
             plt.draw()
             plt.pause(0.0001)
 
+class GA:
+    def __init__(self, tsp: TSP, POPULATION_SIZE=100):
+        self.POPULATION_SIZE = POPULATION_SIZE
+        self.POPULATION = np.array([np.random.permutation(tsp.dim) for _ in range(self.POPULATION_SIZE)])
+        self.tsp = tsp
+        # self.Population = []
+        # for _ in range(self.POPULATION_SIZE):
+        #     self.Population.append(np.random.permutation(TSP.dim))
+    def evaluate(self, population):
+        fitness_scores = np.array([tsp(chromosome) for chromosome in population])
+        # self.fitness_scores = fitness_scores
+        return fitness_scores
+    
+    def selection(self, fitness_scores, population, Q=2, REPETITIONS=50):
+        '''Function for Tournament Selection'''
+        
+        parents = []
+        
+        for n in range(REPETITIONS):
+            tournament_selection_idx = np.random.choice(np.arange(len(population)), Q, replace=False) # maybe replace = True
+            tournament_winner = tournament_selection_idx[np.argmin(fitness_scores[tournament_selection_idx])]
+            parents.append(population[tournament_winner])
+        # self.POPULATION = new_population
+        return parents
+    
+    def cross_over(self, parents, C_O_RATE=.7):
+        
+        offspring = []
+        n_iterations = len(parents)
+        
+        for _ in range(n_iterations//2):
+            parent1_idx, parent2_idx = np.random.choice(n_iterations, 2, replace=False) # maybe set to true...increases convergence
+            parent1 = parents[parent1_idx]
+            parent2 = parents[parent2_idx]
+            
+            child1, child2 = self.cycle_cross_over(parent1, parent2)
+            offspring.append(child1)
+            offspring.append(child2)
+            
+        return offspring
+    
+    def cycle_cross_over(self, parent1, parent2):
+        # TODO: Handle if no cycles -> order cross over
+        size = len(parent1)
+        child1 = np.full(size, -1)  
+        child2 = np.full(size, -1)
+    
+        visited = np.zeros(size, dtype=bool)
+        
+        gen_p1 = parent1[0]
+        stop_gen = parent1[0]
+        cycle = [0]
+        while True:
+            gen_p2_idx = np.where(parent2 == gen_p1)[0][0]
+            cycle.append(gen_p2_idx)
+            gen_p1 = parent1[gen_p2_idx]
+            if gen_p1 == stop_gen:
+                break
+        child1[cycle] = parent1[cycle]
+        child2[cycle] = parent2[cycle]
+        
+        child1[child1 < 0] = parent2[child1 < 0]
+        child2[child2 < 0] = parent1[child2 < 0]
+        
+        return child1, child2
+        
+    def mutations(self, population, mutation_rate=.1):
+        MUTATION_TYPE = ['insert_mutation', 'swap_mutation', 'inversion_mutation']
+        mutated_population = []
+        copy_population = np.copy(population)
+        
+        num_mutations = int(len(population) * mutation_rate)
+        mutation_indices = np.random.choice(copy_population.shape[0], num_mutations, replace=False)
+        mutation_pool = copy_population[mutation_indices]
+        
+        for chromosome in mutation_pool:
+            mutation = np.random.choice(MUTATION_TYPE)    
+            
+            if mutation == 'insert_mutation':
+                mutant = self.insert_mutation(chromosome)
+                
+            elif mutation == 'swap_mutation':
+                mutant = self.swap_mutation(chromosome)
+                
+            else:
+                mutant = self.inversion_mutation(chromosome)
+            
+            mutated_population.append(mutant)
+        
+        return mutated_population
+    
+    def insert_mutation(self, chromosome:np.array):
+        gen1, gen2 = np.random.choice(np.arange(len(chromosome)), 2, replace=False) # creates copy to not accidently remove a dimension
+
+        mask = chromosome != gen2
+        new_chromosome = chromosome[mask]
+
+        index_gen1 = np.where(new_chromosome == gen1)[0][0]
+
+        new_chromosome = np.insert(new_chromosome, index_gen1, gen2)
+
+        return new_chromosome
+        
+    def swap_mutation(self, chromosome:np.array):
+        idx_1, idx_2 = np.random.choice(np.arange(len(chromosome)), 2, replace=False) # creates copy to not accidently remove a dimension
+        new_chromosome = np.copy(chromosome)
+        new_chromosome[idx_1] = chromosome[idx_2]
+        new_chromosome[idx_2] = chromosome[idx_1]
+        
+        return new_chromosome
+    
+    def inversion_mutation(self, chromosome:np.array):
+        idx_1, idx_2 = np.random.choice(np.arange(len(chromosome)), 2, replace=False)
+        new_chromosome = np.copy(chromosome)
+        
+        split1 = np.min((idx_1, idx_2))
+        split2 = np.max((idx_1, idx_2))
+        
+        reversed_sequence = chromosome[split1:split2+1][::-1] # +1 to ensure a minimum sequence of 2
+        new_chromosome[split1:split2+1] = reversed_sequence
+        
+        return new_chromosome
+    
+    def reset(self):
+        self.POPULATION = np.array([np.random.permutation(self.tsp.dim) for _ in range(self.POPULATION_SIZE)])
+        
+    def experiment(self, N_REPETITIONS, N_TIMESTEPS):
+        
+        repetition_array = np.zeros(N_TIMESTEPS)
+        
+        for n in range(N_REPETITIONS):
+            self.reset()
+            timestep_array = np.zeros(N_TIMESTEPS)
+            
+            population = self.POPULATION
+            fitness_scores = self.evaluate(population)
+            
+            for t in range(N_TIMESTEPS):
+                print(population.shape)
+                timestep_array[t] =  np.mean(fitness_scores)
+                
+                parents = self.selection(fitness_scores, population)
+                print('parents shape', np.array(parents).shape)
+                offspring = self.cross_over(parents)
+                print('offspring shape', np.array(offspring).shape)
+                mutated_population = self.mutations(offspring)
+                print('mut shape', np.array(mutated_population).shape)
+                population = np.concatenate((parents, offspring, mutated_population))
+                
+                fitness_scores = self.evaluate(population)
+            
+            repetition_array += timestep_array/N_TIMESTEPS
+
+        return repetition_array/N_REPETITIONS
+        
+    def plot(self, array):
+        plt.plot(array)
+        plt.show()
+        
+class RandomWalk():
+    def __init__(self) -> None:
+        pass
+
+'''TESTING'''
+POPULATION_SIZE = 100
+
+
+
 
 if __name__ == "__main__":
-    # Below are a few examples of using the TSP class.
-    # We can either use it as a context manager (i.e. with a with statement)
-    # If we set plot=True, an interactive figure will appear
-    with TSP(plot=True) as tsp:
-        # Sample a 10 random paths
-        for _ in range(10):
-            # Sample a random path
-            random_path = np.random.permutation(tsp.dim)
-            # Here we can use tsp as a function
-            path_length = tsp(random_path)
-            # Display the path
-            tsp.plot_route(random_path, path_length)
-            # Input something to continue
-            input()
+    N_REPETITIONS = 1
+    N_TIMESTEPS = 100
+    # with TSP(plot=False) as tsp:
+    #     # Sample a 10 random paths
+    #     for _ in range(10):
+    #         # Sample a random path
+    #         random_path = np.random.permutation(tsp.dim)
+    #         # Here we can use tsp as a function
+    #         path_length = tsp(random_path)
+    #         # Display the path
+    #         tsp.plot_route(random_path, path_length)
+    #         # Input something to continue
+    #         input()
 
     # Alternatively, you can use the object only for the TSP function,
     # and dont use the plot
     tsp = TSP(plot=False)
-    # Get the path length
-    random_path = np.random.permutation(tsp.dim)
-    route_length = tsp(random_path)
-    print(f"Random path length {route_length: .2f}km")
+    # # Get the path length
+    # random_path = np.random.permutation(tsp.dim)
+    # route_length = tsp(random_path)
+    # print(f"Random path length {route_length: .2f}km")
+    
+    ga = GA(tsp)
+    
+    # parent1 = np.array([1,2,3,4,5,6,7,8,9,0])
+    # parent2 = np.array([3,8,5,1,0,7,9,6,2,4])
+    
+    # print(f'parent1: {parent1} \n parent2: {parent2} \n child1: {ga.cycle_cross_over(parent1, parent2)[0]}')
+    # print(f'parent1: {parent1} \n parent2: {parent2} \n child2: {ga.cycle_cross_over(parent1, parent2)[1]}')
+    
+    # insert_mutation = ga.insert_mutation(parent1)
+    # swap_mutation = ga.swap_mutation(parent1)
+    # inversion_mutation = ga.inversion_mutation(parent1)
+    # print(inversion_mutation)
+    # child1, child2 = ga.cycle_cross_over(parent1, parent2)
+    # print(f'parent1: {tsp(parent1)} \n parent2: {tsp(parent2)} \n child1: {tsp(ga.cycle_cross_over(parent1, parent2)[1])}')
+    
+    array = ga.experiment(N_REPETITIONS, N_TIMESTEPS)
+    print(array)
+    ga.plot(array)
+    
+    
