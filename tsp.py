@@ -287,24 +287,20 @@ class GA:
         self.POPULATION_SIZE = POPULATION_SIZE
         self.POPULATION = np.array([np.random.permutation(tsp.dim) for _ in range(self.POPULATION_SIZE)])
         self.tsp = tsp
-        # self.Population = []
-        # for _ in range(self.POPULATION_SIZE):
-        #     self.Population.append(np.random.permutation(TSP.dim))
+
     def evaluate(self, population):
         fitness_scores = np.array([tsp(chromosome) for chromosome in population])
-        # self.fitness_scores = fitness_scores
         return fitness_scores
     
-    def selection(self, fitness_scores, population, Q=2, REPETITIONS=50):
+    def selection(self, fitness_scores, population, Q=2, percentage=.5):
         '''Function for Tournament Selection'''
         
         parents = []
-        
+        REPETITIONS = int(percentage * self.POPULATION_SIZE)
         for n in range(REPETITIONS):
             tournament_selection_idx = np.random.choice(np.arange(len(population)), Q, replace=False) # maybe replace = True
             tournament_winner = tournament_selection_idx[np.argmin(fitness_scores[tournament_selection_idx])]
             parents.append(population[tournament_winner])
-        # self.POPULATION = new_population
         return parents
     
     def cross_over(self, parents):
@@ -348,7 +344,7 @@ class GA:
         
         return child1, child2
         
-    def mutations(self, population, mutation_rate=.1):
+    def mutations(self, population, mutation_rate=.3):
         MUTATION_TYPE = ['insert_mutation', 'swap_mutation', 'inversion_mutation']
         mutated_population = []
         copy_population = np.copy(population)
@@ -410,18 +406,34 @@ class GA:
         
     def experiment(self, N_REPETITIONS, N_TIMESTEPS):
         
+        object = f'{self}' 
+        algo = object.split('.')[1].split(' ')[0] # name algo
+        
+        best_score = np.inf
+        
         repetition_array = np.zeros(N_TIMESTEPS)
         
         for n in range(N_REPETITIONS):
+            
+            print(f'{algo}: Rep {n} ') # keep track of rep
+            
             self.reset()
             timestep_array = np.zeros(N_TIMESTEPS)
             
             population = self.POPULATION
             fitness_scores = self.evaluate(population)
             
+            
             for t in range(N_TIMESTEPS):
-                timestep_array[t] =  np.mean(fitness_scores)
                 
+                # print(f'{algo}: Timestep {t} ')
+                
+                timestep_array[t] = np.mean(fitness_scores)
+                
+                if best_score > np.min(fitness_scores):
+                    self.best_score = np.min(fitness_scores)
+                    self.best_population = population[np.argmin(fitness_scores)]
+                    
                 parents = self.selection(fitness_scores, population)
                 offspring = self.cross_over(parents)
                 mutated_population = self.mutations(offspring)
@@ -429,8 +441,8 @@ class GA:
                 
                 fitness_scores = self.evaluate(population)
             
-            repetition_array += timestep_array/N_TIMESTEPS
-
+            repetition_array += timestep_array 
+            
         return repetition_array/N_REPETITIONS
     
     
@@ -441,7 +453,7 @@ class RandomWalk(GA):
     
     def selection(self, fitness_scores, population, q=.5):
         '''Function for Random Selection'''
-        Q = int(len(population) * q)
+        Q = int(self.POPULATION_SIZE * q)
         parents_idx = np.random.choice(np.arange(len(population)), Q, replace=False)
         parents = population[parents_idx]
         return parents
@@ -449,64 +461,43 @@ class RandomWalk(GA):
 
 
 
-def plot(dict:dict):
+def plot(dict:dict, POPULATION_SIZE, N_TIMESTEPS, N_REPETITIONS):
+    
     for key in dict.keys():
         plt.plot(dict[key],label=key)
-        print(f'Best solution for{key}:\n  
-            Distance: {np.min(dict[key])}\n
-            Generation: {np.argmin(dict[key])}'
-            )
+        print(f'Best solution for {key}:\n Distance: {np.min(dict[key])}\n Generation: {np.argmin(dict[key])}')
     
+    plt.ylabel('Avg Haversine Distance in km')
+    plt.xlabel('Generation')
+    plt.title(f'Learning Curve for a population of {POPULATION_SIZE}, {N_REPETITIONS} Repetitions of {N_TIMESTEPS} Timesteps')
     plt.legend()
     plt.show()
 
 
 
 if __name__ == "__main__":
-    POPULATION_SIZE = 100
-    N_REPETITIONS = 1
-    N_TIMESTEPS = 100
-    # with TSP(plot=False) as tsp:
-    #     # Sample a 10 random paths
-    #     for _ in range(10):
-    #         # Sample a random path
-    #         random_path = np.random.permutation(tsp.dim)
-    #         # Here we can use tsp as a function
-    #         path_length = tsp(random_path)
-    #         # Display the path
-    #         tsp.plot_route(random_path, path_length)
-    #         # Input something to continue
-    #         input()
+    # TODO: How does Population  Size affect convergence
+    # TODO: How does Mutation rate affect convergence
+    
+    POPULATION_SIZE = 250
+    N_REPETITIONS = 5
+    N_TIMESTEPS = 1000
 
-    # Alternatively, you can use the object only for the TSP function,
-    # and dont use the plot
     tsp = TSP(plot=False)
-    # # Get the path length
-    # random_path = np.random.permutation(tsp.dim)
-    # route_length = tsp(random_path)
-    # print(f"Random path length {route_length: .2f}km")
     
-    ga = GA(tsp)
-    rw = RandomWalk(tsp)
-    
-    # parent1 = np.array([1,2,3,4,5,6,7,8,9,0])
-    # parent2 = np.array([3,8,5,1,0,7,9,6,2,4])
-    
-    # print(f'parent1: {parent1} \n parent2: {parent2} \n child1: {ga.cycle_cross_over(parent1, parent2)[0]}')
-    # print(f'parent1: {parent1} \n parent2: {parent2} \n child2: {ga.cycle_cross_over(parent1, parent2)[1]}')
-    
-    # insert_mutation = ga.insert_mutation(parent1)
-    # swap_mutation = ga.swap_mutation(parent1)
-    # inversion_mutation = ga.inversion_mutation(parent1)
-    # print(inversion_mutation)
-    # child1, child2 = ga.cycle_cross_over(parent1, parent2)
-    # print(f'parent1: {tsp(parent1)} \n parent2: {tsp(parent2)} \n child1: {tsp(ga.cycle_cross_over(parent1, parent2)[1])}')
+    ga = GA(tsp, POPULATION_SIZE=POPULATION_SIZE)
+    rw = RandomWalk(tsp, POPULATION_SIZE=POPULATION_SIZE) 
     
     histories = {}
     
     histories['Genetic Algorithm'] = ga.experiment(N_REPETITIONS, N_TIMESTEPS)
     histories['Random Walk'] = rw.experiment(N_REPETITIONS, N_TIMESTEPS)
+    print(ga.best_population)
+
+    with TSP(plot=True) as tsp:
+        path_length = tsp(ga.best_population)
+        tsp.plot_route(ga.best_population, path_length)
     
-    plot(histories)
+    plot(histories, POPULATION_SIZE, N_TIMESTEPS, N_REPETITIONS)
     
     
